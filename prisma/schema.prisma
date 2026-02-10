@@ -1,0 +1,1009 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+
+} 
+
+datasource db {
+  provider = "mysql"
+
+}
+
+enum TransactionType {
+  WITHDRAW
+  DEPOSIT
+  TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  VENDOR_ADMIN
+  VENDOR_USER
+  SELLER
+  CUSTOMER
+  VERIFIED_CUSTOMER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  REGISTER
+  VERIFY_OTP
+}
+
+enum ApprovalStatus {
+  APPROVED
+  PENDING
+  REJECTED
+}
+
+enum StockUnit {
+  KILOGRAM
+  GRAM
+  TONNE
+  NUMBER
+  PIECE
+  LITER
+  MILLILITER
+  METER
+  CENTIMETER
+  BOX
+  PACK
+}
+
+enum NotificationType {
+  ORDER
+  ORDER_STATUS
+  PAYMENT
+  VENDOR_APPROVAL
+  PRODUCT_APPROVAL
+  COMMENT_APPROVAL
+  RATING
+  SYSTEM
+  PROMOTION
+  VENDOR_MESSAGE
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  WALLET
+  CASH_ON_DELIVERY
+  CARD
+  BANK_TRANSFER
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum ProductAttachmentType {
+  IMAGE
+  VIDEO
+}
+
+enum PromotionTarget {
+  VENDOR
+  PRODUCT
+  SELLER_LISTING
+}
+
+enum PromotionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum SellerListingStatus {
+  OPEN     // accepting vendor responses
+  CLOSED   // seller accepted a vendor
+  CANCELLED
+}
+
+enum VendorListingResponseStatus {
+  PENDING   // vendor accepted, waiting for seller to confirm or reject
+  ACCEPTED  // seller confirmed
+  REJECTED  // seller rejected
+  WITHDRAWN // vendor withdrew
+}
+
+enum VerificationDocumentType {
+  NATIONAL_ID_FRONT
+  NATIONAL_ID_BACK
+  PROOF_OF_ADDRESS
+  OTHER
+}
+
+enum VerificationDocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id              Int @id @default(autoincrement())
+
+  firstName       String?
+  lastName        String?
+  nationalId      String? @unique
+  nationalIdImage String?
+  phone           String? @unique
+  username        String? @unique
+  password        String?
+  avatar          String  @default("storage/users/default.webp")
+
+  role            Role @default(CUSTOMER)
+  status          Status @default(ACTIVE)
+  isVerified      Boolean @default(false)
+
+  otpCode         String?
+  otpExpiry       DateTime?
+  otpTryCount     Int @default(0)
+
+  isBanned        Boolean @default(false)
+  banReason       String?
+  banExpiry       DateTime?
+  banAttempts     Int @default(0)
+  bannedAt        DateTime?
+ 
+
+  refreshTokens   Token[]
+  userActivities  UserActivity[]
+  vendor          Vendor?
+  vendorComments  VendorComment[]
+  productComments ProductComment[]
+  vendorRatings   VendorRating[]
+  productRatings  ProductRating[]
+  notifications   Notification[]
+  wallet          Wallet?
+  orders          Order[]
+  addresses       Address[]
+  cart            Cart?
+  productsApproved    Product[] @relation("ProductApprovedBy")
+  sellerListings      SellerListing[]
+  verificationDocuments UserVerificationDocument[]
+  verificationDocumentsReviewed UserVerificationDocument[] @relation("VerificationDocumentReviewedBy")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([role])
+  @@index([status])
+  @@index([isVerified])
+  @@index([isBanned])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([status, role])
+}
+
+model UserVerificationDocument {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            VerificationDocumentType
+  filePath        String                   // storage path, e.g. "storage/verification/123-national-id.webp"
+  status          VerificationDocumentStatus @default(PENDING)
+
+  reviewedAt      DateTime?
+  reviewedById    Int?
+  reviewedBy      User?  @relation("VerificationDocumentReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  rejectionReason String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+  @@index([reviewedById])
+}
+
+model Token {
+  id              BigInt @id @default(autoincrement())
+
+  token           String @unique
+  expiresAt       DateTime
+  revoked         Boolean @default(false)
+  revokedAt       DateTime?
+  revokedBy       Int?
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revoked])
+  @@index([userId, revoked])
+}
+
+model UserActivity {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            ActivityType
+  device          String
+  ip              String
+  description     String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model Vendor {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int @unique
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name            String 
+  slug            String @unique
+  description     String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  logo            String? @default("storage/vendors/default-logo.webp")
+  banner          String? @default("storage/vendors/default-banner.webp")
+  openHour        String?
+  closeHour       String?
+
+  latitude        Float?
+  longitude       Float?
+  showOnMap       Boolean @default(false)
+  
+  operationalStatus Status @default(ACTIVE)
+  approvalStatus    ApprovalStatus @default(PENDING)
+
+  products        Product[]
+  orders          Order[]
+  comments        VendorComment[]
+  ratings         VendorRating[]
+  promotions             VendorPromotion[]
+  vendorListingResponses VendorListingResponse[]
+  sellerListings         SellerListing[]  // optional: listings that target this vendor
+
+  averageRating   Float @default(0)
+  totalRatings    Int @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([operationalStatus])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Product {
+  id              BigInt @id @default(autoincrement())
+
+  vendorId        BigInt
+  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  name            String
+  slug            String
+  description     String?
+  price           Float
+  stock           Float
+  stockUnit       StockUnit
+  coverImage      String? @default("storage/products/default-cover.webp")
+  
+  isFeatured      Boolean @default(false)
+  status          Status @default(ACTIVE)
+  approvalStatus  ApprovalStatus @default(PENDING)
+
+  approvedAt      DateTime?
+  approvedById    Int?
+  approvedBy      User? @relation("ProductApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([vendorId, slug])
+
+  media           ProductAttachment[]
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  comments        ProductComment[]
+  ratings         ProductRating[]
+  promotions      ProductPromotion[]
+
+  // When this product was created from an accepted seller listing
+  vendorListingResponseId BigInt? @unique
+  vendorListingResponse   VendorListingResponse? @relation(fields: [vendorListingResponseId], references: [id], onDelete: SetNull)
+
+  categoryId      BigInt?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  averageRating   Float @default(0)
+  totalRatings    Int @default(0)
+
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([price])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([vendorId, status])
+  @@index([categoryId, status])
+  @@index([status, isFeatured, createdAt])
+}
+
+model ProductAttachment {
+  id              BigInt @id @default(autoincrement())
+
+  productId       BigInt
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  address         String
+  type            ProductAttachmentType @default(IMAGE)
+  order           Int @default(0)
+  isPrimary       Boolean @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([productId])
+  @@index([isPrimary])
+  @@index([order])
+  @@index([productId, order])
+}
+
+model Category {
+  id              BigInt @id @default(autoincrement())
+
+  parentId        BigInt?
+  parent          Category? @relation("ParentCategory", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Category[] @relation("ParentCategory")
+
+  name            String
+  slug            String @unique
+  description     String?
+  icon            String? @default("storage/categories/default-icon.webp")
+  status          Status @default(ACTIVE)
+  approvalStatus  ApprovalStatus @default(PENDING)
+
+  products        Product[]
+  sellerListings  SellerListing[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model VendorComment {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendorId        BigInt
+  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  content         String
+  status          Status @default(ACTIVE)
+  approvalStatus  ApprovalStatus @default(PENDING)
+
+  vendorRatingId  BigInt? @unique
+  vendorRating    VendorRating? @relation(fields: [vendorRatingId], references: [id], onDelete: SetNull)
+
+  parentId        BigInt?
+  parent          VendorComment? @relation("VendorCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies         VendorComment[] @relation("VendorCommentReplies")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([parentId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([vendorId, status, approvalStatus])
+}
+
+model ProductComment {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId       BigInt
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  content         String
+  status          Status @default(ACTIVE)
+  approvalStatus  ApprovalStatus @default(PENDING)
+
+  productRatingId BigInt? @unique
+  productRating   ProductRating? @relation(fields: [productRatingId], references: [id], onDelete: SetNull)
+
+  parentId        BigInt?
+  parent          ProductComment? @relation("ProductCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies         ProductComment[] @relation("ProductCommentReplies")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@index([approvalStatus])
+  @@index([parentId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([productId, status, approvalStatus])
+}
+
+
+
+model VendorRating {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendorId        BigInt
+  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  value           Int
+  status          Status @default(ACTIVE)
+
+  comment         VendorComment?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([vendorId, status])
+  @@unique([userId, vendorId])
+}
+
+model ProductRating {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId       BigInt
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  value           Int
+  status          Status @default(ACTIVE)
+
+  comment         ProductComment?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([productId, status])
+  @@unique([userId, productId])
+}
+
+model Notification {
+  id              BigInt @id @default(autoincrement())
+
+  userId          Int? // Optional: null for global notifications
+  user            User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type            NotificationType
+  status          NotificationStatus @default(UNREAD)
+  
+  title           String
+  message         String
+  
+  readAt          DateTime?
+  actionUrl       String? // Optional URL to navigate when notification is clicked
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([deletedAt])
+}
+
+
+
+model Wallet {
+  id                     BigInt @id @default(autoincrement())
+
+  userId                 Int @unique
+  user                   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  balance                Decimal @default(0) @db.Decimal(15, 2)
+
+  transactions           Transaction[]
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Transaction {
+  id                     BigInt @id @default(autoincrement())
+
+  walletId               BigInt
+  wallet                 Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  type                   TransactionType
+  status                 TransactionStatus
+  amount                 Decimal @db.Decimal(15, 2)
+  description            String?
+
+  externalId             String? @unique
+  gateway                String?
+  gatewayData            Json?
+
+  orders                 Order[]
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([walletId, status])
+  @@index([walletId, type])
+  @@index([walletId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Address {
+  id                BigInt @id @default(autoincrement())
+
+  userId            Int
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label             String? // "Home", "Work", etc.
+  recipientName     String
+  phone             String
+  addressLine1      String
+  addressLine2      String?
+  city              String
+  state             String?
+  postalCode        String?
+  country           String @default("Iran")
+
+  isDefault         Boolean @default(false)
+
+  orders            Order[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  @@index([userId])
+  @@index([userId, isDefault])
+  @@index([deletedAt])
+}
+
+model Order {
+  id                BigInt @id @default(autoincrement())
+
+  userId            Int
+  user              User @relation(fields: [userId], references: [id])
+
+  vendorId          BigInt
+  vendor            Vendor @relation(fields: [vendorId], references: [id])
+
+  orderNumber       String @unique // e.g., "ORD-2024-001234"
+  status            OrderStatus @default(PENDING)
+
+  // Pricing
+  subtotal          Decimal @db.Decimal(15, 2)
+  tax               Decimal @default(0) @db.Decimal(15, 2)
+  shippingFee       Decimal @default(0) @db.Decimal(15, 2)
+  discount          Decimal @default(0) @db.Decimal(15, 2)
+  total             Decimal @db.Decimal(15, 2)
+
+  // Payment
+  paymentMethod     PaymentMethod
+  paymentStatus     TransactionStatus @default(PENDING)
+  paidAt            DateTime?
+  transactionId     BigInt? // Link to wallet transaction if paid via wallet
+  transaction       Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  // Shipping
+  shippingAddressId BigInt
+  shippingAddress   Address @relation(fields: [shippingAddressId], references: [id])
+  trackingNumber    String?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+
+  // Coupon
+  couponId          BigInt?
+  coupon            Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  // Notes
+  customerNotes     String?
+  adminNotes        String?
+
+  orderItems        OrderItem[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([userId, status])
+  @@index([vendorId, status])
+  @@index([couponId])
+  @@index([deletedAt])
+}
+
+model OrderItem {
+  id                BigInt @id @default(autoincrement())
+
+  orderId           BigInt
+  order             Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId         BigInt
+  product           Product @relation(fields: [productId], references: [id])
+
+  quantity          Decimal @db.Decimal(10, 2)
+  unitPrice         Decimal @db.Decimal(15, 2) // Price at time of order
+  totalPrice        Decimal @db.Decimal(15, 2) // quantity * unitPrice
+
+  // Store product snapshot (in case product is deleted/updated)
+  productName       String
+  productSlug       String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Cart {
+  id                BigInt @id @default(autoincrement())
+
+  userId            Int @unique
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  items             CartItem[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model CartItem {
+  id                BigInt @id @default(autoincrement())
+
+  cartId            BigInt
+  cart              Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId         BigInt
+  product           Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantity          Decimal @db.Decimal(10, 2)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+}
+
+model Coupon {
+  id                BigInt @id @default(autoincrement())
+
+  code              String @unique
+  type              DiscountType
+  value             Decimal @db.Decimal(15, 2)
+  minPurchase       Decimal? @db.Decimal(15, 2)
+  maxDiscount       Decimal? @db.Decimal(15, 2)
+
+  usageLimit        Int?
+  usedCount         Int @default(0)
+
+  validFrom         DateTime
+  validUntil        DateTime
+
+  isActive          Boolean @default(true)
+
+  orders            Order[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@index([validFrom, validUntil])
+}
+
+
+model SellerListing {
+  id              BigInt @id @default(autoincrement())
+
+  // The seller who submitted the request
+  sellerId        Int
+  seller          User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  // Optional: target a specific vendor (null = open to any vendor)
+  vendorId        BigInt?
+  vendor          Vendor? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  // Product info submitted by the seller
+  name            String
+  slug            String
+  description     String?
+  price           Float
+  stock           Float
+  stockUnit       StockUnit
+
+  categoryId      BigInt?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Listing state: OPEN (vendors can accept), CLOSED (seller accepted a vendor), CANCELLED
+  status          SellerListingStatus @default(OPEN)
+
+  // Vendor responses: vendors who clicked "Accept"; seller then confirms or rejects each
+  vendorResponses VendorListingResponse[]
+
+  // Attachments & promotions
+  media           SellerListingAttachment[]
+  promotions      SellerListingPromotion[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([sellerId, slug])
+  @@index([sellerId])
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([vendorId, status])
+  @@index([sellerId, status])
+}
+
+// Vendor accepts a listing → record created. Seller then confirms or rejects. When ACCEPTED, product is created and linked.
+model VendorListingResponse {
+  id              BigInt @id @default(autoincrement())
+
+  vendorId        BigInt
+  vendor          Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  sellerListingId BigInt
+  sellerListing   SellerListing @relation(fields: [sellerListingId], references: [id], onDelete: Cascade)
+
+  // PENDING = waiting for seller to confirm/reject, ACCEPTED = seller confirmed, REJECTED = seller rejected, WITHDRAWN = vendor withdrew
+  status          VendorListingResponseStatus @default(PENDING)
+
+  // When status = ACCEPTED: the product created under this vendor (Product.vendorListingResponseId points here)
+  product         Product?
+
+  vendorMessage   String?   // optional message from vendor when accepting
+  sellerMessage   String?   // optional message from seller when confirming/rejecting
+  respondedAt     DateTime? // when seller confirmed or rejected
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([vendorId, sellerListingId])
+  @@index([vendorId])
+  @@index([sellerListingId])
+  @@index([status])
+  @@index([vendorId, status])
+  @@index([sellerListingId, status])
+}
+
+model SellerListingAttachment {
+  id              BigInt @id @default(autoincrement())
+
+  sellerListingId BigInt
+  sellerListing   SellerListing @relation(fields: [sellerListingId], references: [id], onDelete: Cascade)
+
+  address         String
+  type            ProductAttachmentType @default(IMAGE)
+  order           Int @default(0)
+  isPrimary       Boolean @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@index([sellerListingId])
+  @@index([isPrimary])
+  @@index([order])
+  @@index([sellerListingId, order])
+}
+
+
+// ──────────────────────────────────────────────
+// Promotion System  (admin-defined, fully editable)
+// ──────────────────────────────────────────────
+
+model PromotionType {
+  id              BigInt @id @default(autoincrement())
+
+  name            String                    // e.g. "Special Vendor", "Quick Sell", "Featured Product"
+  slug            String @unique
+  description     String?
+  target          PromotionTarget           // VENDOR, PRODUCT, or SELLER_LISTING
+  price           Decimal @default(0) @db.Decimal(15, 2)
+  durationDays    Int?                      // null = permanent / one-time
+  isActive        Boolean @default(true)
+  sortOrder       Int @default(0)
+  icon            String?                   // optional icon/badge for frontend
+  badge           String?                   // label shown on cards e.g. "HOT", "SPECIAL"
+
+  vendorPromotions        VendorPromotion[]
+  productPromotions       ProductPromotion[]
+  sellerListingPromotions SellerListingPromotion[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([target])
+  @@index([isActive])
+  @@index([target, isActive])
+}
+
+
+// ──────────────────────────────────────────────
+// Promotion Records  (who bought what, when, until when)
+// ──────────────────────────────────────────────
+
+model VendorPromotion {
+  id               BigInt @id @default(autoincrement())
+
+  vendorId         BigInt
+  vendor           Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  promotionTypeId  BigInt
+  promotionType    PromotionType @relation(fields: [promotionTypeId], references: [id], onDelete: Restrict)
+
+  status           PromotionStatus @default(ACTIVE)
+  startsAt         DateTime @default(now())
+  expiresAt        DateTime?
+
+  amountPaid       Decimal? @db.Decimal(15, 2)
+  paymentRef       String?                  // wallet tx id, stripe id, etc.
+  notes            String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([promotionTypeId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([vendorId, status])
+  @@index([vendorId, status, expiresAt])
+}
+
+model ProductPromotion {
+  id               BigInt @id @default(autoincrement())
+
+  productId        BigInt
+  product          Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  promotionTypeId  BigInt
+  promotionType    PromotionType @relation(fields: [promotionTypeId], references: [id], onDelete: Restrict)
+
+  status           PromotionStatus @default(ACTIVE)
+  startsAt         DateTime @default(now())
+  expiresAt        DateTime?
+
+  amountPaid       Decimal? @db.Decimal(15, 2)
+  paymentRef       String?
+  notes            String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([productId])
+  @@index([promotionTypeId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([productId, status])
+  @@index([productId, status, expiresAt])
+}
+
+model SellerListingPromotion {
+  id               BigInt @id @default(autoincrement())
+
+  sellerListingId  BigInt
+  sellerListing    SellerListing @relation(fields: [sellerListingId], references: [id], onDelete: Cascade)
+
+  promotionTypeId  BigInt
+  promotionType    PromotionType @relation(fields: [promotionTypeId], references: [id], onDelete: Restrict)
+
+  status           PromotionStatus @default(ACTIVE)
+  startsAt         DateTime @default(now())
+  expiresAt        DateTime?
+
+  amountPaid       Decimal? @db.Decimal(15, 2)
+  paymentRef       String?
+  notes            String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([sellerListingId])
+  @@index([promotionTypeId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([sellerListingId, status])
+  @@index([sellerListingId, status, expiresAt])
+}

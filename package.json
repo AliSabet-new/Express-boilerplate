@@ -1,0 +1,41 @@
+{
+  "name": "bun-ts",
+  "module": "index.ts",
+  "type": "module",
+  "author": "Sina abedi",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun x prisma generate && bun x prisma db push &&  bun src/server.ts",
+    "db:push": "bun x prisma db push",
+    "db:pull": "bun x prisma db pull",
+    "db:generate": "bun x prisma generate",
+    "db:seed": "bun prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/morgan": "^1.9.10",
+    "@types/multer": "^2.0.0",
+    "prisma": "^7.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@prisma/adapter-mariadb": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "jose": "^6.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.4",
+    "socket.io": "^4.8.1",
+    "superjson": "^2.2.5",
+    "zod": "^4.1.12"
+  }
+}
