@@ -2,7 +2,7 @@
   "name": "bun-ts",
   "module": "index.ts",
   "type": "module",
-  "author": "Sina abedi",
+  "author": "Ali Sabet",
   "private": true,
   "scripts": {
     "dev": "bun --watch src/server.ts",
